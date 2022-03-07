@@ -1,73 +1,80 @@
-# 这是一个示例 Python 脚本。
+#-*- coding:utf-8 -*-
+import random
+import time
+import json
 import requests
-import bs4
+import re
+class TiebaSpider:
+    def __init__(self,name):
+        self.Encoding = 'gbk'
+        self.name =name
+        self.url_temp='https://search.51job.com/list/170200%252C170300,000000,0000,00,9,99,'+name+',2,{}.html?lang=c&postchannel=0000&workyear=99&cotype=99&degreefrom=99&jobterm=99&companysize=99&ord_field=0&dibiaoid=0&line=&welfare='
+        self.heards={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36 Edg/98.0.1108.62'}
+        self.config={'last':1}
+        self.file=open('config.conf','r')
+        # print(self.config)
+        self.config['last'] =json.loads(self.file.read())['last']
+        print(self.config)
 
+    def __del__(self):
+        print("拜~")
+        self.file.close()
 
-def gethtml(url):
-    return requests.get(url)
+    def get_url_list(self,num=2):
+        return [self.url_temp.format(i) for i in range(self.config['last'],683)]
 
+    def parse_url(self,url):
+        response = requests.get(url,headers=self.heards)
+        return response.content.decode('gbk')
 
-def getinfo(Response):
-    soup = bs4.BeautifulSoup(Response, features='html.parser')
-    list = soup.select('.j_joblist .e')
-    print(type(list))
-    arr=[];
-    for i in list:
-        porson=[]
-        el = i.select('.el')
-        for j in el:
-            title = j.select_one('.t .jname').text  # 工作标题
-            porson.append(title)
-            time = j.select_one('.t .time').text  # 发布时间
-            porson.append(time)
-            sal = j.select_one('.info .sal').text
-            porson.append(sal)
+    def save(self,html,num):
+        file_path = '{}-第{}页.json'.format(self.name,num)
+        with open(file_path,"w",encoding=self.Encoding) as f:
+            f.write(html)
 
-            xinxi = j.select_one('.info .d').text
-            porson.append(xinxi)
+    def useRegex(self, input):
+        pattern = re.compile("^(window.__SEARCH_RESULT__) = .*$",re.M)
+        x = pattern.search(input)
+        list = [i for i in x.group()]
+        return "".join(list).replace('window.__SEARCH_RESULT__ = ','').replace("</script>","")
 
+    def run(self):
+        url_list = self.get_url_list()
+        flag = 0
+        for i in url_list:
+            print(i)
             try:
-                daiyu = j.select_one('.tags').text
-            except:
-                daiyu=""
+                html = self.parse_url(i)
 
-            porson.append(daiyu )
-            info = j.select_one('.info').text  # 招聘信息
-            porson.append(info)
-            # print(info)
-
-            # print(xinxi)
-        er = i.select('.er')
-        for j in er:
-            公司 = j.select_one('.cname').text
-            porson.append(公司)
-            公司类型 = j.select_one('.dc').text
-            porson.append(公司类型)
-            try:
-                经营内容 = j.select_one('int').text
-            except:
-                经营内容 = ""
-            porson.append(经营内容)
-
-        arr.append(porson)
-    return arr
+                data=self.useRegex(html)
+                JSON = json.loads(data)
+                self.config['last']+=1
+                job_list = JSON['engine_jds']
+                job_count = JSON['jobid_count']
+                print(job_list)
+                if flag == 0:
+                    print(job_count)
+                    flag = 1
+                page_num = url_list.index(i) + 1
+                self.save(json.dumps(job_list), page_num)
+                time.sleep(random.randint(10, 20))
+            except AttributeError:
+                print("触发反爬机制")
+                self.file.close()
+                self.file = open('config.conf','w')
+                self.file.write(json.dumps(self.config))
+                self.file.close()
+                exit()
 
 
 
+a = TiebaSpider("java")
+a.run()
+# url='https://search.51job.com/list/170200%252c170300,000000,0000,00,9,99,java,2,2.html?lang=c&postchannel=0000&workyear=99&cotype=99&degreefrom=99&jobterm=99&companysize=99&ord_field=0&dibiaoid=0&line=&welfare='
+# r=requests.get(url)
+# print(r.content.decode('gbk'))
 
-# 按间距中的绿色按钮以运行脚本。
-if __name__ == '__main__':
-    # work = "java"
-    # url = '''
-    # https://search.51job.com/list/170200%252c170300,000000,0000,00,9,99,'''+work+''',2,1.html?lang=c&postchannel=0000&workyear=99&cotype=99&degreefrom=99&jobterm=99&companysize=99&ord_field=0&dibiaoid=0&line=&welfare=
-    # '''
-    # response = gethtml(url)
-    html = open('html.html')
-    arr = getinfo(html)
-    print(len(arr))
-    index =0
-    for i in arr:
-        print("第"+str(index) +"个人")
-        for j in i:
-            print(j)
-        index+=1
+
+# input='"engine_jds":[{"type":"engine_jds","jt":"0_0","tags":[],"ad_track":"","jobid":"82332481","coid":"2720339","effect":"1","is_special_job":"","job_href":"https:\/\/jobs.51job.com\/erqiqu\/82332481.html?s=sou_sou_soulb&t=0_0","job_name":"诚聘 Java中、高级软件工程师","job_title":"诚聘 Java中、高级软件工程师","company_href":"https:\/\/jobs.51job.com\/all\/co2720339.html","company_name":"云计划软件科技（上海）有限公司","providesalary_text":"0.7-1万\/月","workarea":"170202","workarea_text":"郑州-二七区","updatedate":"03-04","iscommunicate":"","companytype_text":"合资","degreefrom":"5","workyear":"4","issuedate":"2022-03-04 18:22:17","isFromXyz":"","isIntern":"","jobwelf":"免费班车 专业培训 定期体检 年终奖金 五险 补充医疗保险 员工旅游","jobwelf_list":["免费班车","专业培训","定期体检","年终奖金","五险","补充医疗保险","员工旅游"],"isdiffcity":"","attribute_text":["郑州-二七区","2年经验","大专","招8人"],"companysize_text":"150-500人","companyind_text":"计算机软件","adid":""},xxx]'
+# x=useRegex(input)
+# print("".join(list))
